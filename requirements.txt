@@ -1,3 +1,6 @@
 flask 
 locust
 gunicorn
+celery
+redis
+packaging

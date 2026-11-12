@@ -1,4 +1,30 @@
 services:
+  
+  redis:
+    image: redis:7-alpine
+    container_name: redis-broker
+    ports:
+      - "6379:6379"
+  api-backend:
+    build:
+      context: .
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    expose:
+      - "5000"
+    stop_grace_period: "15s"
+    deploy:
+      replicas: 4
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 256M
+
   load-balancer: 
     image: nginx:latest
     container_name: nginx-balanceador
@@ -13,16 +39,39 @@ services:
         limits:
           cpus: '0.10'
           memory: 64M
-  api-backend:
-    build:
-      context: .
-    expose:
-      - "5000"
+  
+  celery-worker:
+    build: .
+    container_name: worker-procesar-ticket
+    command: celery -A tarea worker --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
     deploy:
-      replicas: 3 
       resources:
         limits:
-          cpus: '0.20'
-          memory: 128M
+          cpus: '0.50'
+  log-viewer:
+    image: amir20/dozzle:latest
+    container_name: dozzle-log
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
   
-  
+  flower:
+    image: mher/flower:2.0.1
+    container_name: Dashboard-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    
